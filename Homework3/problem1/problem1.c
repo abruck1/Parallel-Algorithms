@@ -64,6 +64,15 @@ int * read_vector(int *rows, int *cols) {
       }
       //printf("ful_num=%s :%c\n",full_num.c_str(), c);
     }
+    if (!num.empty()) {
+      full_num = num;
+      num.clear();
+      if (!full_num.empty()) {
+        vector[vector_pointer] = atoi(full_num.c_str());
+        vector_pointer++;
+      }
+    }
+
     fclose(vectorfile);
   }
 
@@ -110,7 +119,15 @@ int * read_matrix(int *rows, int *cols) {
       }
       //printf("ful_num=%s :%c\n",full_num.c_str(), c);
     }
-    fclose(matrixfile);
+    if (!num.empty()) {
+      full_num = num;
+      num.clear();
+      if (!full_num.empty()) {
+        matrix[matrix_pointer] = atoi(full_num.c_str());
+        matrix_pointer++;
+      }
+    }
+   fclose(matrixfile);
   }
 
   return matrix;

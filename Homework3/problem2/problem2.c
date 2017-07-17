@@ -7,7 +7,7 @@
 #include <assert.h>
 
 //#define DEBUG
-#define DEBUG2
+//#define DEBUG2
 
 #define ROOT (rank == 0)
 
@@ -37,6 +37,14 @@ void read_file(int ** array, int *num_elem) {
             array_pointer++;
           }
         }
+      }
+    }
+    if (!num.empty()) {
+      full_num = num;
+      num.clear();
+      if (!full_num.empty()) {
+        (*array)[array_pointer] = atoi(full_num.c_str());
+        array_pointer++;
       }
     }
     fclose(file);
@@ -180,14 +188,14 @@ int main(int argc, char** argv) {
       displ[i] = sum;
       sum += sendcount[i];
     }
-#ifdef DEBUG
-    if (ROOT) {
-      for (int i = 0; i < size; i++) {
-        printf("sendcount[%d]=%d displ[%d]=%d\n", i, sendcount[i], i, displ[i]);
-      }
-    }
-#endif
   }
+#ifdef DEBUG
+  if (ROOT) {
+    for (int i = 0; i < size; i++) {
+      printf("sendcount[%d]=%d displ[%d]=%d\n", i, sendcount[i], i, displ[i]);
+    }
+  }
+#endif
 
   // divide the data among processes as described by sendcount and displ
   //MPI_Scatterv(&array[0], sendcount, displ, MPI_INT, &rec_buf[0], num_elem, MPI_INT, root, orig_comm);

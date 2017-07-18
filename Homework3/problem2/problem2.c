@@ -92,7 +92,7 @@ void split_array (int **buf, int pivot, int **mylo, int *numlo, int **myhi, int 
     } else {
       *numhi += 1;
     }
-#ifdef DEBUG
+#ifdef DEBUG2
     printf("rec_buf[%d]=%d, pivot=%d numlo=%d numhi=%d\n",i,(*buf)[i], pivot, *numlo, *numhi);
 #endif
   }
@@ -130,6 +130,8 @@ int elem_to_proc(int rank, int size, int num_elem) {
   if (size <= num_elem) {
     init_num_elem = avg_elem_per_proc + ((size < num_elem) && (rank < (num_elem % size)));
   } else {
+    // if number of proc is bigger than the number of elem
+    // Need to split the comm to reduce size of world
     if (rank < num_elem) init_num_elem = 1;
     else init_num_elem = 0;
   }
@@ -168,8 +170,7 @@ int main(int argc, char** argv) {
   //  a. Send the number of elem to each proc
   //  b. Send the elems
   MPI_Bcast(&num_elem, 1, MPI_INT, root, MPI_COMM_WORLD);
-  // FIXME: if number of proc is bigger than the number of elem
-  // Need to split the comm to reduce size of world
+  
   MPI_Comm orig_comm;
   MPI_Comm_split(MPI_COMM_WORLD, 1, rank, &orig_comm);
 
@@ -198,10 +199,9 @@ int main(int argc, char** argv) {
 #endif
 
   // divide the data among processes as described by sendcount and displ
-  //MPI_Scatterv(&array[0], sendcount, displ, MPI_INT, &rec_buf[0], num_elem, MPI_INT, root, orig_comm);
   MPI_Scatterv(array, sendcount, displ, MPI_INT, rec_buf, init_num_elem, MPI_INT, root, orig_comm);
  
-#ifdef DEBUG
+#ifdef DEBUG2
   for (int i = 0; i < init_num_elem; i++) {
     printf("rank=%d elem[%d]=%d\n", rank, i, rec_buf[i]);
   }
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
   for (int dim = size; dim > 1; dim >>=1) {
     // 3. Each proc do a local quick sort
     qsort(rec_buf, new_num_elem, sizeof(int), sort);
-#ifdef DEBUG
+#ifdef DEBUG2
     for (int i = 0; i < new_num_elem; i++) {
       printf("new rank=%d(%d) num_elem=%d elem[%d]=%d\n", new_rank, rank, new_num_elem, i, rec_buf[i]);
     }
@@ -238,8 +238,10 @@ int main(int argc, char** argv) {
     // if small: partner = new_rank + dim/2
     // if big: partner = new_rank - dim/2
     int partner;
-    if (new_rank >= (dim/2)) partner = new_rank - ((dim-0)/2);
-    else partner = new_rank + ((dim-0)/2);
+    if (new_rank >= (dim/2)) partner = new_rank - (dim/2);
+    else partner = new_rank + (dim/2);
+    if (dim == 1) partner = new_rank;
+  
 
     int *mylo, *myhi, *hislo, *hishi, num_hishi, num_hislo;
     int numlo, numhi;
@@ -251,14 +253,14 @@ int main(int argc, char** argv) {
       printf("dim=%d old rank=%d newrank=%d partner=%d pivot=%d, numlo=%d\n", dim, rank, new_rank, partner, pivot, numlo);
 #endif
       
-      MPI_Send(&numlo, 1, MPI_INT, partner, 0, new_comm);
-      MPI_Recv(&num_hishi, 1, MPI_INT, partner, 0, new_comm, MPI_STATUS_IGNORE);
+      MPI_Sendrecv(&numlo, 1, MPI_INT, partner, 0,
+                   &num_hishi, 1, MPI_INT, partner, 0, new_comm, MPI_STATUS_IGNORE);
 
       hishi = (int *) malloc(num_hishi * sizeof(int));
 
       // send the lows, and get hi
-      MPI_Send(mylo, numlo, MPI_INT, partner, 0, new_comm);
-      MPI_Recv(hishi, num_hishi, MPI_INT, partner, 0, new_comm, MPI_STATUS_IGNORE);
+      MPI_Sendrecv(mylo, numlo, MPI_INT, partner, 0,
+                   hishi, num_hishi, MPI_INT, partner, 0, new_comm, MPI_STATUS_IGNORE);
       
       rec_buf = combine_arrays(rec_buf, myhi, numhi, hishi, num_hishi, &new_num_elem);
 #ifdef DEBUG
@@ -271,14 +273,14 @@ int main(int argc, char** argv) {
       printf("dim=%d old rank=%d newrank=%d partner=%d pivot=%d, numhi=%d\n", dim, rank, new_rank, partner, pivot, numhi);
 #endif      
       // send the number of highs, and get number of lows
-      MPI_Send(&numhi, 1, MPI_INT, partner, 0, new_comm);
-      MPI_Recv(&num_hislo, 1, MPI_INT, partner, 0, new_comm, MPI_STATUS_IGNORE);
+      MPI_Sendrecv(&numhi, 1, MPI_INT, partner, 0,
+                   &num_hislo, 1, MPI_INT, partner, 0,new_comm, MPI_STATUS_IGNORE);
       
       hislo = (int *) malloc(num_hislo * sizeof(int));
       
       // send the highs, and get lows
-      MPI_Send(myhi, numhi, MPI_INT, partner, 0, new_comm);
-      MPI_Recv(hislo, num_hislo, MPI_INT, partner, 0, new_comm, MPI_STATUS_IGNORE);
+      MPI_Sendrecv(myhi, numhi, MPI_INT, partner, 0,
+                   hislo, num_hislo, MPI_INT, partner, 0, new_comm, MPI_STATUS_IGNORE);
       
       rec_buf = combine_arrays(rec_buf, mylo, numlo, hislo, num_hislo, &new_num_elem);
 #ifdef DEBUG
@@ -330,25 +332,30 @@ int main(int argc, char** argv) {
 
   // Pass around a token in rank order to append to the file
 
-  int token;
-  if (rank != 0) {
-    MPI_Recv(&token, 1, MPI_INT, rank - 1, 0,
-             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    append_results(rec_buf, new_num_elem);
-  } else {
-    // write value of rec_buf to file
-    append_results(rec_buf, new_num_elem);
+  if (size > 1) {
+    int token;
+    if (rank != 0) {
+      MPI_Recv(&token, 1, MPI_INT, rank - 1, 0,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      append_results(rec_buf, new_num_elem);
+    } else {
+      // write value of rec_buf to file
+      append_results(rec_buf, new_num_elem);
     
-    // Set the token's value if you are process 0
-    token = -1;
+      // Set the token's value if you are process 0
+      token = -1;
+    }
+    MPI_Send(&token, 1, MPI_INT, (rank + 1) % size,
+           0, MPI_COMM_WORLD);
+    if (rank == 0) {
+      MPI_Recv(&token, 1, MPI_INT, size - 1, 0,
+             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+  } else {
+      append_results(rec_buf, new_num_elem);
   }
-  MPI_Send(&token, 1, MPI_INT, (rank + 1) % size,
-         0, MPI_COMM_WORLD);
-
   // Now process 0 can receive from the last process.
   if (rank == 0) {
-    MPI_Recv(&token, 1, MPI_INT, size - 1, 0,
-             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     free(array);
     free(displ);
     free(sendcount);

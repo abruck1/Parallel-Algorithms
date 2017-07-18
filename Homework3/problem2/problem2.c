@@ -1,4 +1,5 @@
 #include <string>
+#include <cstring>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -330,8 +331,52 @@ int main(int argc, char** argv) {
   // s.t. the elements are in the procs in ascending order
   // Now we want to write to file output.txt
 
-  // Pass around a token in rank order to append to the file
+  // I am doing this only for the comparison vs. the seq sort
+  int *gathercount, *gatherdispl;
+  int *sorted_array;
+  if (size > 1) {
+    // send the num of elem in local array
+    if (rank != 0) {
+      MPI_Send(&new_num_elem, 1, MPI_INT, root, 0,
+               MPI_COMM_WORLD);
+    } else {
+      gathercount = (int *) malloc(size * sizeof(int));
+      gatherdispl = (int *) malloc(size * sizeof(int));
+      sorted_array = (int *) malloc(num_elem * sizeof(int));
+      
+      int sum = 0;
+      gathercount[0] = new_num_elem;
+      gatherdispl[0] = sum;
+      sum += gathercount[0];
 
+      for (int i = 1; i < size; i++) {
+        MPI_Recv(&gathercount[i], 1, MPI_INT, i, 0,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        gatherdispl[i] = sum;
+        sum += gathercount[i];
+      }
+    }
+    // send the local array now
+    MPI_Gatherv(rec_buf, new_num_elem, MPI_INT, sorted_array, gathercount, gatherdispl, MPI_INT, 0, MPI_COMM_WORLD);
+  } else {
+    sorted_array = (int *) malloc(num_elem * sizeof(int)); 
+    memcpy(sorted_array, rec_buf, num_elem * sizeof(int));
+  }
+  
+  if (ROOT) {
+    int *seq_sorted_array = (int *) malloc(num_elem * sizeof(int)); 
+    memcpy(seq_sorted_array, array, num_elem * sizeof(int));
+    qsort(seq_sorted_array, num_elem, sizeof(int), sort); 
+    for (int i = 0; i < num_elem; i++) {
+      if (sorted_array[i] != seq_sorted_array[i]) {
+        printf("ERROR: sorted_array[%d]=%d and seq_sorted_array[%d]=%d DISAGREE\n", i, sorted_array[i], i, seq_sorted_array[i]);
+      }
+    }
+    free(seq_sorted_array);
+    free(sorted_array);
+  }
+  
+  // Pass around a token in rank order to append to the file
   if (size > 1) {
     int token;
     if (rank != 0) {
@@ -355,10 +400,13 @@ int main(int argc, char** argv) {
       append_results(rec_buf, new_num_elem);
   }
   // Now process 0 can receive from the last process.
-  if (rank == 0) {
+  if (ROOT) {
     free(array);
+    free(gatherdispl);
+    free(gathercount);
     free(displ);
     free(sendcount);
+    printf("sorted_array and seq_sorted_array AGREE!\n");
   }
 
   free(rec_buf);

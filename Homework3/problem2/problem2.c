@@ -395,6 +395,8 @@ int main(int argc, char** argv) {
     if (rank == 0) {
       MPI_Recv(&token, 1, MPI_INT, size - 1, 0,
              MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      free(gatherdispl);
+      free(gathercount);
     }
   } else {
       append_results(rec_buf, new_num_elem);
@@ -402,8 +404,6 @@ int main(int argc, char** argv) {
   // Now process 0 can receive from the last process.
   if (ROOT) {
     free(array);
-    free(gatherdispl);
-    free(gathercount);
     free(displ);
     free(sendcount);
     printf("sorted_array and seq_sorted_array AGREE!\n");

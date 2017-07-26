@@ -11,53 +11,29 @@ int main()
 {
   // dft test
   int n = 8;
-  cvec x(n);
+  carray x(n);
   for(int i=0; i<n; i++)
     x[i] = i+1;
 
-  dft mydft(n);
-
-  cvec X(n);
-  mydft.forward(X,x);
-
-  cvec xp(n);
-  mydft.reverse(xp,X);
-
+  dft(x);
   for(int i=0; i<n; i++)
-    std::cout << i << ": " << X[i] << std::endl;
-
+    std::cout << i << ": " << x[i] << std::endl;
   std::cout << std::endl;
-  for(int i=0; i<n; i++)
-    std::cout << i << ": " << xp[i] << std::endl;
-std::cout << std::endl;
 
 // fft test
-  cdouble* y = new cdouble[n];
+  carray y(n);
   for(int i=0; i<n; i++)
     y[i] = i+1;
 
-  fft myfft(n);
-
-  cdouble* Y = new cdouble[n];
-  myfft.forward(Y,y);
-
-  cdouble* yp = new cdouble[n];
-  myfft.reverse(yp,Y);
-
+  fft(y);
   for(int i=0; i<n; i++)
-    std::cout << i << ": " << Y[i] << std::endl;
-
+    std::cout << i << ": " << y[i] << std::endl;
   std::cout << std::endl;
 
+  ifft(y);
   for(int i=0; i<n; i++)
-    std::cout << i << ": " << yp[i] << std::endl;
-
+    std::cout << i << ": " << y[i] << std::endl;
   std::cout << std::endl;
-
-
-    delete[] y;
-    delete[] yp;
-    delete[] Y;
 
   return 0;
 }

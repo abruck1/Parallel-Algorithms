@@ -1,5 +1,5 @@
 CC = g++
-CC_FLAGS = -std=c++14
+CC_FLAGS = -std=c++14 -lcilkrts -fcilkplus -ldl
 LIBS = -lm
 INCLUDE_DIRS =
 LIB_DIRS =

@@ -5,6 +5,7 @@
 
 // fft functions
 void fft(carray& x);
+void cilk_fft(carray& x);
 void ifft(carray& x);
 
 #endif

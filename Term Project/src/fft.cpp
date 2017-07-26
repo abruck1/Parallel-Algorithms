@@ -1,6 +1,14 @@
 #include "fft.h"
+#include <cilk/cilk.h>
+
 
 void transform(carray& x, direction dir);
+void cilk_transform(carray& x, direction dir);
+
+void cilk_fft(carray& x)
+{
+  cilk_transform(x, FORWARD);
+}
 
 void fft(carray& x)
 {
@@ -30,6 +38,34 @@ void transform(carray& x, direction dir)
     // odd side recursive call
     carray O = x[std::slice(1, N/2, 2)];
     transform(O, dir);
+
+    // combine
+    double v = (2*(dir==REVERSE)-1) * 2 * PI / N;
+    for (size_t k = 0; k < N/2; ++k)
+    {
+        cdouble t = std::polar(1.0, v * k) * O[k];
+        x[k] = E[k] + t;
+        x[k+N/2] = E[k] - t;
+    }
+}
+
+void cilk_transform(carray& x, direction dir)
+{
+    const size_t N = x.size();
+
+    // recursion base case
+    if (N <= 1)
+      return;
+
+    // even side recursive call
+    carray E = x[std::slice(0, N/2, 2)];
+    cilk_spawn transform(E, dir);
+
+    // odd side recursive call
+    carray O = x[std::slice(1, N/2, 2)];
+    cilk_spawn transform(O, dir);
+
+    cilk_sync;
 
     // combine
     double v = (2*(dir==REVERSE)-1) * 2 * PI / N;

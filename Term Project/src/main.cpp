@@ -16,9 +16,10 @@ int main( int argc, char *argv[] )
 {
   // read cmdline args to get number of elements to transform /*{{{*/
   int n=0;
-  if ( argc != 2 ) // argc should be 2 for correct execution
+  if ( argc != 2 ) { // argc should be 2 for correct execution
     std::cout<<"usage: "<< argv[0] <<" needs number of elements to transform\n";
     return -1;
+  }
   else {
     n = std::stoi(argv[1]);
   }

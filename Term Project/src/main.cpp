@@ -12,16 +12,24 @@ using namespace std::literals::complex_literals;
 #define FFT
 //#define DEBUG
 
+bool isPow2(int n) {
+  return n && (!(n & (n-1)));
+}
+
 int main( int argc, char *argv[] )
 {
   // read cmdline args to get number of elements to transform /*{{{*/
   int n=0;
   if ( argc != 2 ) { // argc should be 2 for correct execution
-    std::cout<<"usage: "<< argv[0] <<" needs number of elements to transform\n";
+    std::cout << "ERROR: usage: " << argv[0] << " needs number of elements to transform\n";
     return -1;
   }
   else {
     n = std::stoi(argv[1]);
+    if (!isPow2(n)) {
+      std::cout << "ERROR: Argument " << n << " should be power of 2!\n";
+      return -1;
+    }
   }
 /*}}}*/
 #ifdef DFT /*{{{*/
@@ -73,9 +81,12 @@ int main( int argc, char *argv[] )
 #endif
 
   ifft(y);
+  ifft(cilk_y);
 #ifdef DEBUG
-  for(int i=0; i<n; i++)
-    std::cout << i << ": " << y[i] << std::endl;
+  for(int i=0; i<n; i++) {
+    std::cout << "noncilk - " << i << ": " << y[i] << std::endl;
+    std::cout << "cilk    - " << i << ": " << cilk_y[i] << std::endl;
+  }
   std::cout << std::endl;
 #endif // DEBUG
 #endif // FFT
